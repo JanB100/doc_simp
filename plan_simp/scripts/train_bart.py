@@ -1,9 +1,10 @@
 import argparse
 
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from plan_simp.data.bart import BartDataModule
 from plan_simp.models.bart import BartFinetuner
@@ -40,13 +41,16 @@ if __name__ == '__main__':
     # checkpoint callback
     checkpoint_callback = ModelCheckpoint(monitor="val_loss", save_last=True)
 
+    # early stopping callback
+    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=1)
+
     trainer = pl.Trainer.from_argparse_args(
         args,
         val_check_interval=args.val_check_interval,
         logger=wandb_logger,
-        accelerator="ddp",
-        plugins=DDPPlugin(find_unused_parameters=True),
-        callbacks=[checkpoint_callback],
+        accelerator="gpu",
+        strategy=DDPStrategy(find_unused_parameters=True),
+        callbacks=[checkpoint_callback, early_stopping],
         precision=16,)
 
     trainer.fit(model, dm)

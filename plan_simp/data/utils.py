@@ -165,7 +165,7 @@ def load_sent_context_tensors(context_ids, context_dir, sep="#$#", context_windo
     if doc_pos is not None:
         return full_contexts, sent_pos_ids, doc_pos_ids
 
-    return full_contexts, sent_pos_ids
+    return full_contexts, sent_pos_ids, None
 
 def prepare_batch_context(self, batch, labels, bart=False):
     data = {}

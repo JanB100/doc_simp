@@ -1,214 +1,233 @@
-# plan_simp
+# doc_simp
 
-This repo contains code and resources for the following papers:
-* EACL 2023 paper, [_Document-Level Planning for Text Simplification_](https://aclanthology.org/2023.eacl-main.70/).
-* ACL 2023 Findings paper, [_Context-Aware Document Simplification_](https://aclanthology.org/2023.findings-acl.834/).
+This repo contains code and resources for the paper Beyond Sentence-Level Text Simplification (Reproducibility Study of Context-Aware Document Simplification).
+It is based on the [repository](https://github.com/liamcripwell/plan_simp) for the original paper.
 
-We will progressively update with code, instructions, pretrained models, data, etc. as soon as we can make them available.
+We changed the original code by implementing early stopping into the training procedure, adding Rouge-L to the evaluation metrics and fixing some minor errors. We also added our code for constructing the paragraph-level Wiki-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
 
 ## Installation
 
 ```bash
-git clone https://github.com/liamcripwell/plan_simp.git
-cd plan_simp
-pip install -e .
+git clone https://github.com/JanB100/doc_simp.git
+cd doc_simp
+conda create -n doc_simp python=3.9
+conda activate doc_simp
+pip install -r requirements.txt
 ```
 
 ## Pretrained models
-We provide pretrained models for the components of our contextual planning system `PG_Dyn` as well as several of the models proposed in [_Context-Aware Document Simplification_](https://arxiv.org/abs/2305.06274) on [HuggingFace](https://huggingface.co/liamcripwell).
-
-Systems can be loaded within Python as follows:
-```python
-from plan_simp.models.classifier import load_planner
-from plan_simp.models.bart import load_simplifier
-
-# contextual simplification planner
-planner, p_tokenizer, p_hparams = load_planner("liamcripwell/pgdyn-plan")
-
-# simplification model
-simplifier, tokenizer, hparams = load_simplifier("liamcripwell/pgdyn-simp")
-```
-
-An example use-case of inference on out-of-domain test data is illustrated in [this script](examples/wikiauto_inference.sh).
+We share all Wiki-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). The original authors also made some of their Newsela-auto pretrained models available on [HuggingFace](https://huggingface.co/liamcripwell). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name, e.g. janbakker/conbart.
 
 ## Data
-The Wiki-Auto data used to train the relevant planners and simplification models can be downloaded [here](https://drive.google.com/file/d/1lU8htUIVBuuU24HrPErpV01hlA6tc-d1/view?usp=sharing). Please contact the authors for more information regarding the Newsela data once you have obtain a licence.
+The preprocessed Wiki-auto datasets shared by the original authors can be downloaded [here](https://drive.google.com/file/d/1lU8htUIVBuuU24HrPErpV01hlA6tc-d1/view?usp=sharing).
+The paragraph-level data was constructed using [this script](data/paragraph_alignment.py), and can be downloaded [here](https://drive.google.com/file/d/1ZeALAhdWBfVNsFlRnPsGGia4NQB1Dbjq/view?usp=sharing).
+All files should be placed into the data directory.
 
 ## Preparing context representations
-We provide a script to generate sentence-level context encodings which are used within `pgdyn-plan` and `conbart`.
+Start by generating the context encodings of all complex and simple sentences. These are used by the contextual classifiers and ConBART.
 
 ```bash
-# encode sentence-level context embeddings to be used by the planner
-python plan_simp/scripts/encode_contexts.py \
-	--data=examples/wikiauto_docs_valid.csv \
-	--x_col=complex \
-	--id_col=pair_id \
-	--save_dir=fake_context_dir/
+mkdir context
 ```
-
-## Plan-guided simplification
-A planner can be used to dynamically generate simplified documents. The planner will iteratively predict an operation for the current sentence (given the document context) and pass this to an encoder-decoder to conditionally generate a simplification. These simplifications are then used within the context of subsequent sentences. There is no need to pass a `--simple_context_dir` argument because dynamic context will be managed on-the-fly.
-
-```bash
-python plan_simp/scripts/generate.py dynamic 
-  --clf_model_ckpt=<planner_model> # e.g. liamcripwell/pgdyn-plan
-  --model_ckpt=<simplification_model> # e.g. liamcripwell/pgdyn-simp
-  --test_file=<test_sentences>
-  --doc_id_col=pair_id # document identifier for each sentence
-  --context_doc_id=c_id
-  --context_dir=<context_dir>
-  --reading_lvl=s_level 
-  --out_file=<output_csv> 
-```
-
-Alternatively, plan-guided simplification can be formed with pre-determined operation labels, or with no guidance at all.
-
-```bash
-# plan-guidance with predefined operations in `"label"` column
-python plan_simp/scripts/generate.py inference 
-  --model_ckpt=<simplification_model> # e.g. liamcripwell/pgdyn-simp
-  --test_file=<test_sentences> 
-  --op_col=label
-  --reading_lvl=s_level 
-  --out_file=<output_csv> 
-  
-# generation with end-to-end model (no plan guidance)
-python plan_simp/scripts/generate.py inference 
-    --model_ckpt=liamcripwell/ledpara 
-    --test_file=<test_data>
-    --reading_lvl=s_level 
-    --out_file=<output_csv> 
-```
-
-Generation can also be performed within python (see the source code for more parameter details).
-
 ```python
-# basic generation with no planning
-from plan_simp.models.bart import run_generator
-preds = run_generator(model_ckpt="liamcripwell/ledpara", **params)
+from plan_simp.scripts.encode_contexts import encode
 
-# dynamic plan-guided generation
-from plan_simp.scripts.generate import Launcher
-launcher = Launcher()
-launcher.dynamic(model_ckpt="liamcripwell/o-conbart", clf_model_ckpt="liamcripwell/pgdyn-plan", **params)
+for split in ["train", "valid", "test"]:
+    for x in ["complex", "simple"]:
+        encode(data=f"data/wikiauto_docs_{split}.csv",
+               save_dir=f"context/{x}", x_col=x)
 ```
 
-## Training a planner
-
-The following commands show example use cases for training your own planner models.
-
-For Newsela, make sure to use the `--reading_lvl` flag to specify a column in the data which indicates the target reading level of the simplification.
+## Training the planning models
+The script below can be used to train the context-independent classifier on 2 GPUs.
 
 ```bash
-# baseline
-python plan_simp/scripts/train_clf.py 
-  --train_file=<train_file> 
-  --val_file=<val_file> 
-  --x_col=complex 
-  --y_col=label 
-  --batch_size=32
-  --learning_rate=1e-5
-  --ckpt_metric=val_macro_f1
-
-# contextual (PG variants)
-python plan_simp/scripts/train_clf.py 
-  --train_file=<train_file> 
-  --val_file=<val_file> 
-  --x_col=complex 
-  --y_col=label 
-  --batch_size=32 
-  --learning_rate=1e-5
-  --ckpt_metric=val_macro_f1  
-  --add_context 
-  --context_doc_id=pair_id 
-  --context_dir=<context_dir> 
-  --context_window=13
-  # used for dynamic context loading
-  --simple_context_doc_id=pair_id
-  --simple_context_dir=<context_dir>
-
-# sequence tagging
-python plan_simp/scripts/train_tagger.py 
-  --train_file=<train_file> 
-  --val_file=<val_file> 
-  --x_col=<doc_id> 
-  --y_col=<labels> 
-  --batch_size=32 
-  --learning_rate=1e-5
-  --embed_dir=<sent_rep_dir>
+python plan_simp/scripts/train_clf.py \
+  --name=classifier \
+  --project=planning_models \
+  --train_file=data/wikiauto_sents_train.csv \
+  --val_file=data/wikiauto_sents_valid.csv \
+  --x_col=complex \
+  --y_col=label \
+  --batch_size=32 \
+  --learning_rate=1e-5 \
+  --ckpt_metric=val_macro_f1 \
+  --hidden_dropout_prob=0.1 \
+  --max_epochs=10 \
+  --devices=2 \
 ```
 
-## Evaluating a planner
+To train the contextual classifier, adjust the script as follows.
+1. Change the model name to pg-dyn.
+2. Use weight initialization.
 
 ```bash
-# baseline
-python plan_simp/scripts/eval_clf.py <planner_model> <test_set>
-
-# contextual
-python plan_simp/scripts/eval_clf.py <planner_model> <test_set> 
-  --add_context=True 
-  --context_dir=<context_dir> 
-  --context_doc_id=pair_id
-  # used for dynamic context loading
-  --simple_context_dir=<context_dir>
-  --simple_context_doc_id=pair_id
-  --reading_lvl=s_level # for Newsela
-
-# sequence tagging; for Newsela add --x_col=c_id --reading_lvl=s_level
-python plan_simp/scripts/eval_tagger.py <planner_model> <test_set> --embed_dir=<sent_rep_dir>
+  --checkpoint=planning_models/<path_to_classifier> \
 ```
 
-## Evaluating simplification
-Below is an example of how to evaluate simplification outputs from the systems. BARTScore is disabled by default but can be enabled by pointing to a model via the `--bartscore_path` flag.
+3. Use dynamic context and a context window of 13.
 
 ```bash
-# evaluate simplification performance
+  --add_context \
+  --context_window=13 \
+  --context_doc_id=pair_id \
+  --context_dir=context/complex \
+  --simple_context_doc_id=pair_id \
+  --simple_context_dir=context/simple \
+```
+
+To include document positional embeddings, also add the following line.
+
+```bash
+  --doc_pos_embeds \
+```
+
+## Evaluating the planning models
+The command below can be used to evaluate the context-independent classifier.
+
+```bash
+python plan_simp/scripts/eval_clf.py \
+    <path_to_planning_model> \
+    data/wikiauto_sents_test.csv \
+```
+
+To evaluate a contextual classifier, add the following arguments.
+
+```bash
+  --add_context=True \
+  --context_dir=context/complex \
+  --simple_context_dir=context/simple \
+```
+
+To evaluate on Wiki-auto the contextual classifier pretrained on Newsela-auto,
+set the model path to liamcripwell/pgdyn-plan and also specify the target reading level.
+
+ ```bash
+  --reading_lvl=3 \
+```
+
+## Training the simplification models
+The script below shows how to train a text-only BART model.
+
+```bash
+python plan_simp/scripts/train_bart.py \
+  --name=<model_name> \ #can be any name
+  --project=simplification_models \
+  --train_file=data/wikiauto_<docs/para/sents>_train.csv \
+  --val_file=data/wikiauto_<docs/para/sents>_valid.csv \
+  --x_col=complex \
+  --y_col=simple \
+  --batch_size=8 \
+  --accumulate_grad_batches=2 \
+  --lr=2e-5 \
+  --devices=2 \
+  --skip_val_gen \
+```
+
+To train any other model, add the following arguments.
+
+If it is a context-aware model (ConBART):
+
+```bash
+  --add_context \
+  --context_dir=context/complex \
+  --context_doc_id=pair_id \
+  --simple_context_dir=context/simple \
+  --simple_context_doc_id=pair_id \
+```
+
+If it is a LED model:
+
+```bash
+  --longformer \
+```
+
+If it is a plan-guided model:
+
+```bash
+  --op_col=label \
+```
+
+## Generating simplifications
+Use the script below to perform inference with a text-only model.
+
+```bash
+mkdir results
+
+python plan_simp/scripts/generate.py inference \
+  --model_ckpt=<path_to_simplification_model> \
+  --test_file=data/wikiauto_<docs/para/sents>_test.csv \
+  --out_file=results/<model_name>.csv \
+```
+
+To perform inference with any other model, adjust the script as follows.
+
+If it is a context-aware model:
+
+```bash
+  --context_doc_id=pair_id \
+  --context_dir=context/complex \
+  --temp_dir=<model_name> \
+```
+
+If it is guided by an oracle plan:
+
+```bash
+  --op_col=label \
+```
+
+If it is guided by the contextual classifier:
+
+1. Change the first argument from inference to dynamic
+
+2. Add the following arguments:
+
+```bash
+  --clf_model_ckpt=<path_to_planning_model> \
+  --context_doc_id=pair_id \
+  --context_dir=context/complex \
+  --temp_dir=<model_name> \
+```
+
+3. If the model operates at the paragraph-level, also add this line:
+
+```bash
+  --para_lvl=True \
+```
+
+Finally, if the system was pretrained on Newsela-auto:
+
+```bash
+  --reading_lvl=3 \
+```
+
+## Evaluating the simplifications
+
+Download the [BARTScore](https://github.com/neulab/BARTScore/tree/main) model [here](https://drive.google.com/file/d/1_7JfF7KOInb7ZrxKHIigTMR4ChVET01m/view).
+
+Use the command below to evaluate document-level outputs.
+
+```bash
 python plan_simp/scripts/eval_simp.py \
-  --input_data=examples/wikiauto_docs_valid.csv \ # document-level input
-  --output_data=test_out.csv \ # sentence-level predictions (will be automatically merged)
+  --input_data=results/<model_name>.csv \
+  --x_col=complex \
+  --r_col=simple \
+  --y_col=pred \
+  --prepro=True \
+  --bartscore_path=bart_score.pth \
+```
+
+To evaluate sentence- and paragraph-level outputs, use this command instead.
+
+```bash
+python plan_simp/scripts/eval_simp.py \
+  --input_data=data/wikiauto_docs_test.csv \
+  --output_data=results/<model_name>.csv \
   --x_col=complex \
   --r_col=simple \
   --y_col=pred \
   --doc_id_col=pair_id \
   --prepro=True \
-  --sent_level=True
-```
-
-## Citation
-
-If you find this repository useful, please cite our publications: 
-
-* [Document-Level Planning for Text Simplification](https://aclanthology.org/2023.eacl-main.70/)
-```bibtex
-@inproceedings{cripwell-etal-2023-document,
-    title = "Document-Level Planning for Text Simplification",
-    author = {Cripwell, Liam  and
-      Legrand, Jo{\"e}l  and
-      Gardent, Claire},
-    booktitle = "Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics",
-    month = may,
-    year = "2023",
-    address = "Dubrovnik, Croatia",
-    publisher = "Association for Computational Linguistics",
-    url = "https://aclanthology.org/2023.eacl-main.70",
-    pages = "993--1006",
-}
-```
-
-* [Context-Aware Document Simplification](https://aclanthology.org/2023.findings-acl.834/)
-```bibtex
-@inproceedings{cripwell-etal-2023-context,
-    title = "Context-Aware Document Simplification",
-    author = {Cripwell, Liam  and
-      Legrand, Jo{\"e}l  and
-      Gardent, Claire},
-    booktitle = "Findings of the Association for Computational Linguistics: ACL 2023",
-    month = jul,
-    year = "2023",
-    address = "Toronto, Canada",
-    publisher = "Association for Computational Linguistics",
-    url = "https://aclanthology.org/2023.findings-acl.834",
-    doi = "10.18653/v1/2023.findings-acl.834",
-    pages = "13190--13206",
-}
+  --sent_level=True \
+  --bartscore_path=bart_score.pth \
 ```

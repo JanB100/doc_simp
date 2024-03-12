@@ -11,16 +11,16 @@ from tqdm import tqdm
 from easse.bleu import sentence_bleu
 from easse.fkgl import corpus_fkgl
 from easse.sari import get_corpus_sari_operation_scores
+from rouge_score import rouge_scorer
 from transformers import BartTokenizer
 
 from plan_simp.eval.dsari import dsari_doc
 from plan_simp.eval.bartscore import BARTScorer
 from plan_simp.eval.bertscore import calculate_bertscore
-from plan_simp.eval.questeval import calculate_questeval
 from plan_simp.eval.easse_sari import get_corpus_sari_operation_scores
 from plan_simp.eval.smart_eval import matching_functions, scorer
 
-DEFAULT_METRICS = ["bart", "dsari", "sari", "fkgl", "smart", "bleu"]
+DEFAULT_METRICS = ["bart", "dsari", "sari", "fkgl", "smart", "bleu", "rouge"]
 
 
 def read_file(filename):
@@ -106,6 +106,9 @@ def output_results(input_data, metrics=DEFAULT_METRICS):
     if "bleu" in metrics:
         print("BLEU:")
         print(input_data["bleu"].mean())
+    if "rouge" in metrics:
+        print("ROUGE-L:")
+        print(input_data["rouge"].mean())
     if "bert" in metrics:
         print("P_BERT:")
         print(input_data["bertscore"].mean())
@@ -163,8 +166,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
     # clean sequences of special tokens, whitespace, etc.
     input_seqs, output_seqs, ref_seqs = clean_sequences(input_seqs, output_seqs, ref_seqs)
 
-    if prepro:
-        tokenizer = BartTokenizer.from_pretrained('facebook/bart-base', add_prefix_space=False)
+    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base', add_prefix_space=False)
 
     n = len(input_seqs)
     lens = np.zeros(n)
@@ -175,6 +177,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         "sari": np.zeros((n, 4)),
         "dsari": np.zeros((n, 4)),
         "gdsari": np.zeros(n),
+        "rouge": np.zeros(n),
         "fkgl": np.zeros(n),
         "smart": np.zeros((n, 3))
     }
@@ -207,6 +210,11 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
         # sentence tokenized documents for FKGL and SMART
         out_doc_sents = nltk.sent_tokenize(out_doc)
         ref_docs_sents = [nltk.sent_tokenize(ref_doc) for ref_doc in ref_docs]
+
+        if "rouge" in metrics:
+            r_scorer = rouge_scorer.RougeScorer(["rougeLsum"], use_stemmer=True)
+            rouge = r_scorer.score("\n".join(out_doc_sents), "\n".join(ref_docs_sents[0]))
+            results["rouge"][i] = rouge["rougeLsum"].fmeasure
 
         if "fkgl" in metrics:
             results["fkgl"][i] = corpus_fkgl(out_doc_sents)
@@ -253,6 +261,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
 
     # require explicit permission to run as it can be very slow with document-length inputs
     if "questeval" in metrics:
+        from plan_simp.eval.questeval import calculate_questeval
         print("Calculating QuestEvals...")
         questevals = np.array(calculate_questeval(input_seqs, output_seqs, ref_seqs, 
                                 batch_size=questeval_batch_size, use_ref=questeval_ref, log_dir=questeval_log_dir))
@@ -274,6 +283,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
     input_data["sari_k"] = results["sari"][:,2]
     input_data["sari_d"] = results["sari"][:,3]
     input_data["bleu"] = results["bleu"]
+    input_data["rouge"] = results["rouge"]
     input_data["fkgl"] = results["fkgl"]
     input_data["pred_len"] = lens
     input_data["pred_num_sents"] = nsents
@@ -287,7 +297,7 @@ def evaluate(input_data, output_data=None, ref_data=None, prepro=False, x_col=No
 
     output_results(input_data, metrics=metrics)
 
-    return input_data
+    # return input_data
 
 
 if __name__ == '__main__':

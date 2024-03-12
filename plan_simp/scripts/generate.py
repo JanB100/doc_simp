@@ -174,7 +174,7 @@ class Launcher(object):
                 # generate sentence with predicted operation ctrl token
                 if hparams["add_context"]:
                     i_texts["pred"] = run_generator(model, i_texts.reset_index(drop=True), x_col="complex", op_col="pred_l", reading_lvl=reading_lvl,
-                                                    tokenizer=tokenizer, min_length=False, device=device, beams=beams, silent=True,
+                                                    tokenizer=tokenizer, min_length=False, device=device, batch_size=8, beams=beams, silent=True,
                                                     context_dir=context_dir, context_doc_id=context_doc_id, simple_context_dir=l_z_dir, 
                                                     simple_context_doc_id=simple_context_doc_id, simple_sent_id=None)
                 else:
@@ -182,7 +182,7 @@ class Launcher(object):
                                                     tokenizer=tokenizer, min_length=False, device=device, beams=beams, silent=True)
             else:
                 i_texts["pred"] = run_generator(model, i_texts.reset_index(drop=True), x_col="complex", op_col=op_col, reading_lvl=reading_lvl,
-                                                    tokenizer=tokenizer, min_length=False, device=device, beams=beams, silent=True,
+                                                    tokenizer=tokenizer, min_length=False, device=device, batch_size=8, beams=beams, silent=True,
                                                     context_dir=context_dir, context_doc_id=context_doc_id, simple_context_dir=l_z_dir, 
                                                     simple_context_doc_id=simple_context_doc_id, simple_sent_id=None)
                 i_sents = i_texts # set `i_sents` to be same as texts (assumes operating at the sentence-level)

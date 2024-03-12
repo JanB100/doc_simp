@@ -1,4 +1,4 @@
-easse @ git+git://github.com/feralvam/easse.git@8f62a807cce1c73771ad2c6c28a1c72e927d581a
+easse @ git+https://github.com/feralvam/easse.git@8f62a807cce1c73771ad2c6c28a1c72e927d581a
 fire==0.3.1
 nltk==3.4.3
 numpy==1.19.4
@@ -7,3 +7,6 @@ sentence-transformers==2.2.2
 transformers==4.29.1
 pytorch-lightning==1.9.5
 torch==1.13.1
+wandb==0.16.4
+sacrebleu==1.5.1
+Jinja2==3.1.3
