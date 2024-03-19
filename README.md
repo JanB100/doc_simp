@@ -13,6 +13,7 @@ cd doc_simp
 conda create -n doc_simp python=3.9
 conda activate doc_simp
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Pretrained models
