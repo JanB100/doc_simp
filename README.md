@@ -123,6 +123,7 @@ python plan_simp/scripts/train_bart.py \
   --lr=2e-5 \
   --devices=2 \
   --skip_val_gen \
+  --sent_level \ #if it is a sentence- or paragraph-level model
 ```
 
 To train any other model, add the following arguments.
