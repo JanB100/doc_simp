@@ -123,7 +123,7 @@ python plan_simp/scripts/train_bart.py \
   --lr=2e-5 \
   --devices=2 \
   --skip_val_gen \
-  --sent_level \ #if it is a sentence- or paragraph-level model
+  --sent_level \ #only if it is a sentence- or paragraph-level model
 ```
 
 To train any other model, add the following arguments.
@@ -165,6 +165,10 @@ python plan_simp/scripts/generate.py inference \
 To perform inference with any other model, adjust the script as follows.
 
 If it is a context-aware model:
+
+1. Change the first argument from inference to dynamic
+
+2. Add the following arguments:
 
 ```bash
   --context_doc_id=pair_id \
