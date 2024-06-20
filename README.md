@@ -1,6 +1,6 @@
 # doc_simp
 
-This repo contains code and resources for the paper Beyond Sentence-Level Text Simplification (Reproducibility Study of Context-Aware Document Simplification).
+This repo contains code and resources for the paper [Beyond Sentence-Level Text Simplification: Reproducibility Study of Context-Aware Document Simplification](https://aclanthology.org/2024.determit-1.3/).
 It is based on the [repository](https://github.com/liamcripwell/plan_simp) for the original paper.
 
 We changed the original code by implementing early stopping into the training procedure, adding Rouge-L to the evaluation metrics and fixing some minor errors. We also added our code for constructing the paragraph-level Wiki-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
