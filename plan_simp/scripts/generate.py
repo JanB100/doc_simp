@@ -11,6 +11,8 @@ import pandas as pd
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 
+from plan_simp.data.bart import merge_sents
+
 from plan_simp.data.utils import OP_TOKENS
 from plan_simp.models.bart import load_simplifier, run_generator
 from plan_simp.models.classifier import load_planner, run_classifier
@@ -26,6 +28,13 @@ class Launcher(object):
         test_set = pd.read_csv(test_file)
         if max_samples is not None:
             test_set = test_set[:max_samples]
+
+        if op_col and len(OP_TOKENS) > 4:
+            if test_set[op_col][0][0] != "[":
+                test_set = merge_sents(test_set, x_col, op_col)
+
+            test_set[op_col] = [["merge" if l == "none" else l for l in eval(ls)] for ls in test_set[op_col]]
+            test_set[op_col] = [[3 if l == -1 else l for l in eval(ls)] for ls in test_set[op_col]]
 
         print(f"Loaded test set of {len(test_set)} examples.")
 
@@ -69,6 +78,13 @@ class Launcher(object):
             doc_ids = doc_ids[:max_samples]
             test_set = test_set[test_set[doc_id_col].isin(doc_ids)]
 
+        if op_col and len(OP_TOKENS) > 4:
+            if test_set[op_col][0][0] != "[":
+                test_set = merge_sents(test_set, "complex", op_col)
+
+            test_set[op_col] = [["merge" if l == "none" else l for l in eval(ls)] for ls in test_set[op_col]]
+            test_set[op_col] = [[3 if l == -1 else l for l in eval(ls)] for ls in test_set[op_col]]
+
         # load planning model
         if clf_model_ckpt is not None:
             clf_model, clf_tokenizer, clf_hparams = load_planner(clf_model_ckpt, add_context=True, device=device)
@@ -96,7 +112,7 @@ class Launcher(object):
             simple_context_doc_id = doc_id_col
 
         preds = ["#"]*len(test_set)
-        pred_ls = [-1]*len(test_set)
+        pred_ls = list(test_set[op_col]) if op_col else [-1]*len(test_set)
 
         # preload existing results from cache
         if result_cache is not None:

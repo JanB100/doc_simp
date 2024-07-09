@@ -1,9 +1,9 @@
 # doc_simp
 
-This repo contains code and resources for the paper [Beyond Sentence-Level Text Simplification: Reproducibility Study of Context-Aware Document Simplification](https://aclanthology.org/2024.determit-1.3/).
-It is based on the [repository](https://github.com/liamcripwell/plan_simp) for the original paper.
+This branch contains code and resources for the paper Plan-Guided Simplification of Biomedical Documents.
+It is based on the main branch, which is in turn based on this [repository](https://github.com/liamcripwell/plan_simp).
 
-We changed the original code by implementing early stopping into the training procedure, adding Rouge-L to the evaluation metrics and fixing some minor errors. We also added our code for constructing the paragraph-level Wiki-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
+We changed the original code by implementing support for the merge operator and a two-stage classifier approach. We also provide our code for aligning and preprocessing the data, along with the updated Cochrane corpus, the resulting alignments and the preprocessed Cochrane-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
 
 ## Installation
 
@@ -17,15 +17,27 @@ pip install -e .
 ```
 
 ## Pretrained models
-We share all Wiki-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). The original authors also made some of their Newsela-auto pretrained models available on [HuggingFace](https://huggingface.co/liamcripwell). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name, e.g. janbakker/conbart.
+We share all Cochrane-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name.
+
+We also share the [checkpoint](https://drive.google.com/file/d/12FHcrrPdqKgE6R4G7uuTUasuAS9da018/view?usp=sharing) for the neural CRF alignment model which we pretrained on Wiki-manual.
 
 ## Data
-The preprocessed Wiki-auto datasets shared by the original authors can be downloaded [here](https://drive.google.com/file/d/1lU8htUIVBuuU24HrPErpV01hlA6tc-d1/view?usp=sharing).
-The paragraph-level data was constructed using [this script](data/paragraph_alignment.py), and can be downloaded [here](https://drive.google.com/file/d/1ZeALAhdWBfVNsFlRnPsGGia4NQB1Dbjq/view?usp=sharing).
-All files should be placed into the data directory.
+We share the train/val/test splits of our updated Cochrane corpus under [data/corpus](data/corpus).
+
+The script [load_data.py](load_data.py) contains our code for extracting the sentences and paragraphs from the technical abstracts and lay summaries in this corpus.
+
+The script [alignment.py](alignment.py) contains our code for aligning these sentences.
+
+The resulting Cochrane-auto alignments can be found within the [alignments](alignments) directory.
+
+The script [preprocessing.py](preprocessing.py) contains our code for constructing the preprocessed Cochrane-auto datasets based on these alignments.
+
+The resulting sentence-, paragraph- and document-level datasets can be found in the [data](data) directory. 
+
+Finally, the script [analysis.py](analysis.py) contains our code for aligning the output sentences back to the input sentences and subsequently plotting confusion matrices of simplification operation labels.
 
 ## Preparing context representations
-Start by generating the context encodings of all complex and simple sentences. These are used by the contextual classifiers and ConBART.
+Start by generating the context encodings of all complex and simple sentences. These are used by ConBART.
 
 ```bash
 mkdir context
@@ -33,21 +45,21 @@ mkdir context
 ```python
 from plan_simp.scripts.encode_contexts import encode
 
-for split in ["train", "valid", "test"]:
+for split in ["train", "val", "test"]:
     for x in ["complex", "simple"]:
-        encode(data=f"data/wikiauto_docs_{split}.csv",
+        encode(data=f"data/cochrane_docs_{split}.csv",
                save_dir=f"context/{x}", x_col=x)
 ```
 
 ## Training the planning models
-The script below can be used to train the context-independent classifier on 2 GPUs.
+The script below can be used to train the classifier on 2 GPUs.
 
 ```bash
 python plan_simp/scripts/train_clf.py \
   --name=classifier \
   --project=planning_models \
-  --train_file=data/wikiauto_sents_train.csv \
-  --val_file=data/wikiauto_sents_valid.csv \
+  --train_file=data/cochrane_sents_train.csv \
+  --val_file=data/cochrane_sents_val.csv \
   --x_col=complex \
   --y_col=label \
   --batch_size=32 \
@@ -56,55 +68,45 @@ python plan_simp/scripts/train_clf.py \
   --hidden_dropout_prob=0.1 \
   --max_epochs=10 \
   --devices=2 \
+  --use_merge_labels \
 ```
 
-To train the contextual classifier, adjust the script as follows.
-1. Change the model name to pg-dyn.
-2. Use weight initialization.
+To train the first-stage classifier, replace --use_merge_labels with this argument:
 
 ```bash
-  --checkpoint=planning_models/<path_to_classifier> \
+  --binary_clf \
 ```
 
-3. Use dynamic context and a context window of 13.
+To train the second-stage classifier, add the following argument to the script above:
 
 ```bash
-  --add_context \
-  --context_window=13 \
-  --context_doc_id=pair_id \
-  --context_dir=context/complex \
-  --simple_context_doc_id=pair_id \
-  --simple_context_dir=context/simple \
-```
-
-To include document positional embeddings, also add the following line.
-
-```bash
-  --doc_pos_embeds \
+  --second_stage \
 ```
 
 ## Evaluating the planning models
-The command below can be used to evaluate the context-independent classifier.
+The command below can be used to generate a plan with a classifier and evaluate it.
+
+```bash
+mkdir results
+
+python plan_simp/scripts/eval_clf.py \
+    <path_to_planning_model> \
+    data/cochrane_sents_test.csv \
+    --out_file=results/<model_name>.csv \
+    --use_merge_labels \
+```
+
+To evaluate the first-stage classifier, remove the last argument.
+
+To leverage the two-stage approach, run the command below after evaluating the first-stage classifier:
 
 ```bash
 python plan_simp/scripts/eval_clf.py \
     <path_to_planning_model> \
-    data/wikiauto_sents_test.csv \
-```
-
-To evaluate a contextual classifier, add the following arguments.
-
-```bash
-  --add_context=True \
-  --context_dir=context/complex \
-  --simple_context_dir=context/simple \
-```
-
-To evaluate on Wiki-auto the contextual classifier pretrained on Newsela-auto,
-set the model path to liamcripwell/pgdyn-plan and also specify the target reading level.
-
- ```bash
-  --reading_lvl=3 \
+    results/<binary_clf_name>.csv \
+    --out_file=results/<model_name>.csv
+    --use_merge_labels \
+    --second_stage \
 ```
 
 ## Training the simplification models
@@ -114,8 +116,8 @@ The script below shows how to train a text-only BART model.
 python plan_simp/scripts/train_bart.py \
   --name=<model_name> \ #can be any name
   --project=simplification_models \
-  --train_file=data/wikiauto_<docs/para/sents>_train.csv \
-  --val_file=data/wikiauto_<docs/para/sents>_valid.csv \
+  --train_file=data/cochrane_<docs/para/sents>_train.csv \
+  --val_file=data/cochrane_<docs/para/sents>_val.csv \
   --x_col=complex \
   --y_col=simple \
   --batch_size=8 \
@@ -123,7 +125,7 @@ python plan_simp/scripts/train_bart.py \
   --lr=2e-5 \
   --devices=2 \
   --skip_val_gen \
-  --sent_level \ #only if it is a sentence- or paragraph-level model
+  --sent_level \ #only if it is a sentence-level model
 ```
 
 To train any other model, add the following arguments.
@@ -154,11 +156,9 @@ If it is a plan-guided model:
 Use the script below to perform inference with a text-only model.
 
 ```bash
-mkdir results
-
 python plan_simp/scripts/generate.py inference \
   --model_ckpt=<path_to_simplification_model> \
-  --test_file=data/wikiauto_<docs/para/sents>_test.csv \
+  --test_file=data/cochrane_<docs/para/sents>_test.csv \
   --out_file=results/<model_name>.csv \
 ```
 
@@ -182,29 +182,11 @@ If it is guided by an oracle plan:
   --op_col=label \
 ```
 
-If it is guided by the contextual classifier:
-
-1. Change the first argument from inference to dynamic
-
-2. Add the following arguments:
+If it is guided by a generated plan:
 
 ```bash
-  --clf_model_ckpt=<path_to_planning_model> \
-  --context_doc_id=pair_id \
-  --context_dir=context/complex \
-  --temp_dir=<model_name> \
-```
-
-3. If the model operates at the paragraph-level, also add this line:
-
-```bash
-  --para_lvl=True \
-```
-
-Finally, if the system was pretrained on Newsela-auto:
-
-```bash
-  --reading_lvl=3 \
+  --test_file=results/<classifier_name>.csv \
+  --op_col=pred_l \
 ```
 
 ## Evaluating the simplifications

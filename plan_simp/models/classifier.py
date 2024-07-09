@@ -120,8 +120,7 @@ class RobertaClfFinetuner(pl.LightningModule):
         # saves params to the checkpoint and in self.hparams
         self.save_hyperparameters(params)
 
-        num_labels = 5 if self.has_param("multi_split") else 4
-        num_labels = 1 if self.has_param("regression") else num_labels
+        num_labels = 1 if self.has_param("regression") else 5
         self.hparams["num_labels"] = num_labels
         self.op_tokens = OP_TOKENS if not self.has_param("multi_split") else M_OP_TOKENS
 
@@ -175,6 +174,7 @@ class RobertaClfFinetuner(pl.LightningModule):
         }
 
         if not self.has_param("regression"):
+            output["labels"] = batch["labels"].cpu()
             macro_f1 = precision_recall_fscore_support(batch["labels"].cpu(), logits.argmax(axis=1), average="macro")[2]
             output["macro_f1"] = macro_f1
 
@@ -196,13 +196,15 @@ class RobertaClfFinetuner(pl.LightningModule):
         self.log(f"{prefix}_loss", loss)
 
         if not self.has_param("regression"):
-            macro_f1 = np.stack([x["macro_f1"] for x in outputs]).mean()
+            # Compute f1 scores on full validation set, instead of averaging over batches
+            preds = torch.cat([x["preds"].argmax(axis=1) for x in outputs])
+            labels = torch.cat([x["labels"] for x in outputs])
+            macro_f1 = precision_recall_fscore_support(labels, preds, average="macro")[2]
             self.log(f"{prefix}_macro_f1", macro_f1)
-        
+
         # log relative performance for each class
         if self.hparams.log_class_acc:
-            f1s = np.stack([x["accs"] for x in outputs])
-            f1s = np.nanmean(f1s, axis=0) # ignore nans in calculation
+            f1s = precision_recall_fscore_support(labels, preds, average=None, labels=range(self.model.num_labels))[2]
             for i in range(self.model.num_labels):
                 self.log(f"{prefix}_{i}_f1", f1s[i])
 
@@ -301,6 +303,8 @@ class RobertaClfFinetuner(pl.LightningModule):
         parser.add_argument("--simple_context_doc_id", type=str, default=None, required=False,)
         parser.add_argument("--simple_context_dir", type=str, default=None, required=False,)
         parser.add_argument("--binary_clf", action="store_true")
+        parser.add_argument("--second_stage", action="store_true")
+        parser.add_argument("--use_merge_labels", action="store_true")
 
         parser.add_argument("--regression", action="store_true")
 

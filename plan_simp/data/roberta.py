@@ -36,6 +36,20 @@ def append_tokens(df, x_col, tokens):
     seqs = [f"{' '.join([READING_LVLS[row[t]] for t in tokens])} {row[x_col]}" for _, row in df.iterrows()]
     return seqs
 
+def include_subsequent_sentences(df, second_stage=False, op_col=None):
+    """ 
+    Provide both the current and the subsequent sentence as input 
+    to the classifier, and let it predict the label of the first one, 
+    which will be 'merge' if it should be merged with the second sentence. 
+    """
+    df = df.copy()
+    row = df.iloc[0]
+    for i in range(len(df)-1):
+        next_row = df.iloc[i+1]
+        if row.para_id == next_row.para_id and not (second_stage and next_row[op_col] in (0, "delete")):
+            df.at[i, "complex"] += " <\s> " + next_row.complex
+        row = next_row
+    return df
 
 class RobertaDataModule(pl.LightningDataModule):
 
@@ -60,9 +74,11 @@ class RobertaDataModule(pl.LightningDataModule):
     def setup(self, stage):
         # read and prepare input data
         self.train = pd.read_csv(self.hparams.train_file).dropna()
+        self.train = self.preprocess(self.train)
         self.train = self.train.sample(frac=1)[:min(self.hparams.max_samples, len(self.train))] # NOTE: this will actually exclude the last item
         if self.has_param("val_file"):
             self.valid = pd.read_csv(self.hparams.val_file).dropna()
+            self.valid = self.preprocess(self.valid)
         print("All data loaded.")
 
         # train, validation, test split
@@ -133,6 +149,16 @@ class RobertaDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=1, 
                             pin_memory=False, collate_fn=self.prepro_collate)
+
+    def preprocess(self, df):
+        if self.has_param("use_merge_labels"):
+            df = include_subsequent_sentences(df, self.hparams.second_stage, "label")
+            df = df[df.label != "none"]
+
+        if self.hparams.second_stage:
+            df = df[df.label != "delete"]
+
+        return df
 
     def prepare_context_ids(self, df, doc_id_col="c_id", sent_id_col="sent_id"):
         """Prepare context as lookup key."""

@@ -6,17 +6,21 @@ import fire
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
 
+from preprocessing import build_higher_level_datasets
+
 from plan_simp.models.bart import run_generator
 from plan_simp.models.classifier import run_classifier
+from plan_simp.data.roberta import include_subsequent_sentences
 from plan_simp.data.utils import CLASS_LABELS, M_CLASS_LABELS, OP_TOKENS, M_OP_TOKENS, convert_labels
 
 BIN_CLASS = ["delete", "keep"]
 
 
 def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None, add_context=False, context_dir=None,
-                context_doc_id="pair_id", simple_context_dir=None, simple_context_doc_id="pair_id", num_labels=4,
+                context_doc_id="pair_id", simple_context_dir=None, simple_context_doc_id="pair_id", num_labels=5,
                 reading_lvl=None, src_lvl=None, by_level=False, multi_split=False, max_samples=None, mtl=False,
-                device="cuda", num_workers=8, pred_col=None, doc_level=False):
+                device="cuda", num_workers=8, pred_col=None, doc_level=False, 
+                use_merge_labels=False, second_stage=False):
     start = time.time()
     print(f"Starting time: {datetime.now()}")
 
@@ -26,6 +30,14 @@ def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None
         test_set = test_set[:max_samples]
 
     class_labels = M_CLASS_LABELS if multi_split else CLASS_LABELS
+    test_set_out = test_set.copy()
+
+    if use_merge_labels:
+        test_set = include_subsequent_sentences(test_set, second_stage, "pred_l")
+
+    if second_stage:
+        test_set = test_set[test_set.pred_l == 1]
+
     op_tokens = M_OP_TOKENS if multi_split else OP_TOKENS # only needed for MTL models
 
     print("Running planner predictions...")
@@ -67,6 +79,25 @@ def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None
         else:
             pred_ls = [y[0] if len(y) > 0 else 0 for y in pred_ls] # reduce to single operation prediction
         test_set["pred_l"] = pred_ls
+
+    if second_stage:
+        pred_ls = iter(test_set.pred_l)
+        test_set = test_set_out.copy()
+        for i in range(len(test_set)):
+            if test_set.pred_l[i] == 1:
+                test_set.at[i,"pred_l"] = next(pred_ls)
+            else:
+                test_set.at[i,"pred_l"] = class_labels["delete"]
+
+    test_set_out["pred_l"] = test_set.pred_l
+
+    if use_merge_labels:
+        for i in range(len(test_set.pred_l)-1, 0, -1):
+            if test_set.pred_l[i-1] == class_labels["merge"]:
+                test_set.at[i,"pred_l"] = class_labels["merge"]
+                test_set_out.at[i,"pred_l"] = -1
+
+    test_set[y_col] = ["merge" if l == "none" else l for l in test_set[y_col]]
 
     if y_col in test_set.columns:
         # get ground truths
@@ -116,8 +147,12 @@ def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None
 
     # write inpute `DataFrame` with new predictions column to file
     if out_file is not None:
-        test_set.to_csv(out_file, index=False)
+        test_set_out.to_csv(out_file, index=False)
         print(f"Predictions written to {out_file}.")
+
+        para_out, docs_out = build_higher_level_datasets(test_set_out)
+        para_out.to_csv(out_file.split(".")[0] + "_para.csv", index=False)
+        docs_out.to_csv(out_file.split(".")[0] + "_docs.csv", index=False)
 
     end = time.time()
     elapsed = end - start

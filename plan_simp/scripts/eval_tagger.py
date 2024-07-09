@@ -38,9 +38,15 @@ def evaluate(model_loc, test_file, out_file=None, x_col="pair_id", embed_dir=Non
     preds_trim = [preds[i][:c_lens[i]] for i in range(len(preds))]
     test_set["pred_l"] = preds_trim
 
+    label = None
     if "labels" in test_set.columns:
+        label = "labels"
+    elif "label" in test_set.columns:
+        label = "label"
+
+    if label:
         print("Evaluating...")
-        gts = [convert_labels(eval(ls_i), class_labels) for ls_i in test_set.labels]
+        gts = [convert_labels(eval(ls_i), class_labels) for ls_i in test_set[label]]
 
         labels_flat = [l for x in gts for l in x]
         preds_flat = [l for x in preds_trim for l in x]

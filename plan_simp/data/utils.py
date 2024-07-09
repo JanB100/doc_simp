@@ -6,11 +6,11 @@ from typing import Dict
 import torch
 import pandas as pd
 
-CLASS_LABELS = {"ignore": 0, "rephrase": 1, "split": 2, "delete": 3}
+CLASS_LABELS = {"ignore": 0, "rephrase": 1, "split": 2, "merge": 3, "delete": 4}
 M_CLASS_LABELS = {"ignore": 0, "rephrase": 1, "ssplit": 2, "dsplit": 3, "delete": 4}
 
 READING_LVLS = ["<RL_0>", "<RL_1>", "<RL_2>", "<RL_3>", "<RL_4>"]
-OP_TOKENS = ["<COPY>", "<REPHRASE>", "<SPLIT>", "<DELETE>"]
+OP_TOKENS = ["<COPY>", "<REPHRASE>", "<SPLIT>",  "<MERGE>", "<DELETE>"]
 M_OP_TOKENS = ["<COPY>", "<REPHRASE>", "<SSPLIT>", "<DSPLIT>", "<DELETE>"]
 PLAN_TOKENS = ["[PLAN]", "[SIMPLIFICATION]"]
 
