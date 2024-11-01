@@ -1,11 +1,10 @@
-
 import Levenshtein
 import math
 import pandas as pd
-from utils import load_pickle_file
 
 from load_data import load_cochrane_data
 from transformers import BartTokenizerFast
+from utils import load_pickle_file
 
 
 def label(complex_sent, simple_sents, threshold=0.92):
@@ -86,8 +85,9 @@ def add_merge_labels(df, cs_alignments, sc_alignments):
         df[idx[-1]] |= {"label": "none", "simp_sent_id": ssid}
 
 
-def build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments, tokenizer, 
-                                 use_merge_labels=False, cs_alignments=None, threshold=0.5):
+def build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments, tokenizer=None, 
+                                 cs_alignments=None, use_merge_labels=True, threshold=0.5,
+                                 max_length=1024, sep=" <s> ", placeholder="<pad> "):
     """
     Build a sentence-level dataset based on the alignments between sentences.
     """
@@ -97,8 +97,11 @@ def build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments,
         if len(set(a for a in sc_alignments[i] if a))  / len(doc) < threshold:
             continue
 
-        if len(tokenizer('<pad> ' * len(doc) + ' <s> '.join(doc)).input_ids) > 1024:
-            continue
+        if tokenizer:
+            input = placeholder * len(doc) + sep.join(doc)
+
+            if len(tokenizer(input).input_ids) > max_length:
+                continue
 
         simp_sent_id, len_para = 0, 0
         pair_id = dois[i].split(".")[2]
@@ -109,7 +112,7 @@ def build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments,
 
             sent_df.append({"pair_id": pair_id, "para_id": para_ids[i][j], "sent_id": j,
                             "complex": sent, "label": label(sent, simple_sents),
-                            "simple": simple_sents, "simp_sent_id": simp_sent_id, 
+                            "simple": str(simple_sents), "simp_sent_id": simp_sent_id, 
                             "doc_pos": doc_pos, "doc_quint": math.ceil(doc_pos/0.2), 
                             "doc_len": len(doc)})
 
@@ -124,27 +127,25 @@ def build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments,
     return pd.DataFrame(sent_df)
 
 
-def build_higher_level_datasets(sent_df):
+def build_higher_level_dataset(sent_df, para_lvl=False, sep=" <s> "):
     """
-    Build paragraph- and document-level datasets given a sentence-level dataset.
+    Build a paragraph- or document-level dataset given a sentence-level dataset.
     """
-    para_df, doc_df = [], []
+    higher_level_df = []
+    cols = ["pair_id", "para_id"] if para_lvl else ["pair_id"]
 
-    for (pair_id, para_id), df in sent_df.groupby(["pair_id", "para_id"], sort=False):
-        simple_para = [x for y in df.simple for x in y]
-        row = {"pair_id": pair_id, "para_id": para_id, 
-               "complex": " <s> ".join(df.complex), "simple": " <s> ".join(simple_para)}
-        row |= {col: list(df[col]) for col in df if col not in row.keys()}
-        para_df.append(row)
+    for ids, df in sent_df.groupby(cols, sort=False):
+        row = {col: id_ for col, id_ in zip(cols, ids)}
+        row |= {"complex": sep.join(df.complex)}
 
-    for pair_id, df in sent_df.groupby("pair_id", sort=False):
-        simple_doc = [x for y in df.simple for x in y]
-        row = {"pair_id": pair_id, "complex": " <s> ".join(df.complex), 
-               "simple": " <s> ".join(simple_doc)}
+        if "simple" in sent_df.columns:
+            simple = [x for y in df.simple for x in eval(y)]
+            row |= {"simple": sep.join(simple)}
+
         row |= {col: list(df[col]) for col in df if col not in row.keys()}
-        doc_df.append(row)
-        
-    return pd.DataFrame(para_df), pd.DataFrame(doc_df)
+        higher_level_df.append(row)
+
+    return pd.DataFrame(higher_level_df)
 
 
 def build_all_datasets():
@@ -152,18 +153,18 @@ def build_all_datasets():
     Function demonstrating how we built our datasets. 
     """
     for split in ["train", "val", "test"]:
-        dois, complex, complex_para_ids, simple, simple_para_ids = load_cochrane_data(split)
+        dois, complex, complex_para_ids, simple, _ = load_cochrane_data(split)
+        tokenizer = BartTokenizerFast.from_pretrained("facebook/bart-base", add_prefix_space=True)
 
-        filtered_sc_alignments = load_pickle_file(f"alignments/filtered_sc_{split}.pkl")
-        cs_alignments = load_pickle_file(f"alignments/cs_{split}.pkl")
-
-        tokenizer = BartTokenizerFast.from_pretrained('facebook/bart-base', add_prefix_space=True)
+        filtered_sc_alignments = load_pickle_file(f"data/alignments/filtered_sc_{split}.pkl")
+        cs_alignments = load_pickle_file(f"data/alignments/cs_{split}.pkl")
 
         sent_df = build_sentence_level_dataset(dois, complex, simple, complex_para_ids, \
-                                filtered_sc_alignments, tokenizer, use_merge_labels=True,
-                                cs_alignments=cs_alignments)
-        para_df, doc_df = build_higher_level_datasets(sent_df)
+                                               filtered_sc_alignments, tokenizer, \
+                                               cs_alignments, use_merge_labels=True)
+        para_df = build_higher_level_dataset(sent_df, para_lvl=True, sep=" ")
+        doc_df = build_higher_level_dataset(sent_df, para_lvl=False, sep=" ")
 
-        sent_df.to_csv(f"cochrane_sents_{split}.csv", index=False)
-        para_df.to_csv(f"cochrane_para_{split}.csv", index=False)
-        doc_df.to_csv(f"cochrane_docs_{split}.csv", index=False)
+        sent_df.to_csv(f"cochraneauto_sents_{split}.csv", index=False)
+        para_df.to_csv(f"cochraneauto_para_{split}.csv", index=False)
+        doc_df.to_csv(f"cochraneauto_docs_{split}.csv", index=False)

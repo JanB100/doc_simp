@@ -30,11 +30,11 @@ class Launcher(object):
             test_set = test_set[:max_samples]
 
         if op_col and len(OP_TOKENS) > 4:
-            if test_set[op_col][0][0] != "[":
+            if not isinstance(test_set[op_col][0], str) or test_set[op_col][0][0] != "[":
                 test_set = merge_sents(test_set, x_col, op_col)
 
             test_set[op_col] = [["merge" if l == "none" else l for l in eval(ls)] for ls in test_set[op_col]]
-            test_set[op_col] = [[3 if l == -1 else l for l in eval(ls)] for ls in test_set[op_col]]
+            test_set[op_col] = [[3 if l == -1 else l for l in ls] for ls in test_set[op_col]]
 
         print(f"Loaded test set of {len(test_set)} examples.")
 

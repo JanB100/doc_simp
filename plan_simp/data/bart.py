@@ -25,6 +25,7 @@ def merge_sents(df, x_col, op_col, y_col=None):
                 df.at[i-1,y_col] = str(eval(df[y_col][i-1]) + eval(df[y_col][i]))
             df = df.drop(i)
 
+    df[op_col] = list(map(str, df[op_col]))
     return df
 
 
@@ -74,9 +75,9 @@ class BartDataModule(pl.LightningDataModule):
 
         if self.has_param("sent_level"):
             # join simple sentences if training sentence-level generative model
-            train_labels = [" <s> ".join(eval(y)) for y in self.train[self.hparams.y_col]]
-            valid_labels = [" <s> ".join(eval(y)) for y in self.valid[self.hparams.y_col]]
-            test_labels = [" <s> ".join(eval(y)) for y in self.test[self.hparams.y_col]]
+            train_labels = [" ".join(eval(y)) for y in self.train[self.hparams.y_col]]
+            valid_labels = [" ".join(eval(y)) for y in self.valid[self.hparams.y_col]]
+            test_labels = [" ".join(eval(y)) for y in self.test[self.hparams.y_col]]
         else:
             train_labels = list(self.train[self.hparams.y_col])
             valid_labels = list(self.valid[self.hparams.y_col])

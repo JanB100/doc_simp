@@ -97,9 +97,8 @@ def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None
                 test_set.at[i,"pred_l"] = class_labels["merge"]
                 test_set_out.at[i,"pred_l"] = -1
 
-    test_set[y_col] = ["merge" if l == "none" else l for l in test_set[y_col]]
-
     if y_col in test_set.columns:
+        test_set[y_col] = ["merge" if l == "none" else l for l in test_set[y_col]]
         # get ground truths
         if doc_level:
             # handle case of document-level inputs (multiple operation predictions per input)

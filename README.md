@@ -1,6 +1,6 @@
 # doc_simp
 
-This branch contains code and resources for the paper Plan-Guided Simplification of Biomedical Documents.
+This branch contains code and resources for the chapter Plan-Guided Simplification of Biomedical Documents.
 It is based on the main branch, which is in turn based on this [repository](https://github.com/liamcripwell/plan_simp).
 
 We changed the original code by implementing support for the merge operator and a two-stage classifier approach. We also provide our code for aligning and preprocessing the data, along with the updated Cochrane corpus, the resulting alignments and the preprocessed Cochrane-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
@@ -26,9 +26,9 @@ We share the train/val/test splits of our updated Cochrane corpus under [data/co
 
 The script [load_data.py](load_data.py) contains our code for extracting the sentences and paragraphs from the technical abstracts and lay summaries in this corpus.
 
-The script [alignment.py](alignment.py) contains our code for aligning these sentences.
+The script [alignment.py](alignment.py) contains our code for automatically aligning these sentences using the pretrained alignment model and for computing its performance on a manually annotated subset.
 
-The resulting Cochrane-auto alignments can be found within the [alignments](alignments) directory.
+The resulting Cochrane-auto alignments can be found together with our manual alignments under [data/alignments](data/alignments).
 
 The script [preprocessing.py](preprocessing.py) contains our code for constructing the preprocessed Cochrane-auto datasets based on these alignments.
 
@@ -47,7 +47,7 @@ from plan_simp.scripts.encode_contexts import encode
 
 for split in ["train", "val", "test"]:
     for x in ["complex", "simple"]:
-        encode(data=f"data/cochrane_docs_{split}.csv",
+        encode(data=f"data/cochraneauto_docs_{split}.csv",
                save_dir=f"context/{x}", x_col=x)
 ```
 
@@ -58,8 +58,8 @@ The script below can be used to train the classifier on 2 GPUs.
 python plan_simp/scripts/train_clf.py \
   --name=classifier \
   --project=planning_models \
-  --train_file=data/cochrane_sents_train.csv \
-  --val_file=data/cochrane_sents_val.csv \
+  --train_file=data/cochraneauto_sents_train.csv \
+  --val_file=data/cochraneauto_sents_val.csv \
   --x_col=complex \
   --y_col=label \
   --batch_size=32 \
@@ -91,7 +91,7 @@ mkdir results
 
 python plan_simp/scripts/eval_clf.py \
     <path_to_planning_model> \
-    data/cochrane_sents_test.csv \
+    data/cochraneauto_sents_test.csv \
     --out_file=results/<model_name>.csv \
     --use_merge_labels \
 ```
@@ -116,8 +116,8 @@ The script below shows how to train a text-only BART model.
 python plan_simp/scripts/train_bart.py \
   --name=<model_name> \ #can be any name
   --project=simplification_models \
-  --train_file=data/cochrane_<docs/para/sents>_train.csv \
-  --val_file=data/cochrane_<docs/para/sents>_val.csv \
+  --train_file=data/cochraneauto_<docs/para/sents>_train.csv \
+  --val_file=data/cochraneauto_<docs/para/sents>_val.csv \
   --x_col=complex \
   --y_col=simple \
   --batch_size=8 \
@@ -158,7 +158,7 @@ Use the script below to perform inference with a text-only model.
 ```bash
 python plan_simp/scripts/generate.py inference \
   --model_ckpt=<path_to_simplification_model> \
-  --test_file=data/cochrane_<docs/para/sents>_test.csv \
+  --test_file=data/cochraneauto_<docs/para/sents>_test.csv \
   --out_file=results/<model_name>.csv \
 ```
 
@@ -209,7 +209,7 @@ To evaluate sentence- and paragraph-level outputs, use this command instead.
 
 ```bash
 python plan_simp/scripts/eval_simp.py \
-  --input_data=data/wikiauto_docs_test.csv \
+  --input_data=data/cochraneauto_docs_test.csv \
   --output_data=results/<model_name>.csv \
   --x_col=complex \
   --r_col=simple \

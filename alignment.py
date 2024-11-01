@@ -1,11 +1,11 @@
-from transformers.data.processors import InputExample, glue_convert_examples_to_features
-import torch
-from torch.utils.data import TensorDataset, SequentialSampler, DataLoader
-from sklearn.utils.extmath import softmax
-import tqdm
 import numpy as np
+import torch
+import tqdm
 
-from utils import load_pickle_file, save_as_pickle_file
+from sklearn.utils.extmath import softmax
+from transformers.data.processors import InputExample, glue_convert_examples_to_features
+from torch.utils.data import TensorDataset, SequentialSampler, DataLoader
+from utils import load_pickle_file
 
 
 def get_similarity_score_from_sent_pair(sentA_list, sentB_list, model, tokenizer, max_length = 128, mode = 'simple_to_complex'):
@@ -103,7 +103,7 @@ def filter_alignments(sc_alignments, complex, simple, simple_para_ids, bert_mode
     return new_alignments
 
 
-def obtain_alll_alignments(aligner_checkpoint, split="train"):
+def obtain_all_alignments(aligner_checkpoint, split="train"):
     """ 
     Function demonstrating how we obtained our alignments. 
     """
@@ -127,32 +127,70 @@ def obtain_alll_alignments(aligner_checkpoint, split="train"):
     return sc_alignments, cs_alignments, filtered_sc_alignments
 
 
+def load_alignments(idx, simple_to_complex=True):
+    """
+    Function for loading a subset of automatic alignments by their indices.
+    """
+    sc_or_cs = "sc" if simple_to_complex else "cs"
+    train_alignments = load_pickle_file(f"data/alignments/{sc_or_cs}_train.pkl")
+    val_alignments = load_pickle_file(f"data/alignments/{sc_or_cs}_val.pkl")
+    test_alignments = load_pickle_file(f"data/alignments/{sc_or_cs}_test.pkl")
+    all_alignments = train_alignments + val_alignments + test_alignments
+    return [all_alignments[i] for i in idx]
+
+
+def add_1_to_n_alignments(sc_alignments, label_lists):
+    """
+    Adds 1-to-n alignments to a set of simple-to-complex alignments
+    based on the labels of the corresponding complex sentences.
+    """
+    alignments = sc_alignments
+
+    for i, labels in enumerate(label_lists):
+        merge_idx = []
+
+        for j, label in enumerate(labels):
+            if label in ["merge", "none"]:
+                merge_idx.append(j+1)
+
+                if j+1 in sc_alignments[i]:
+                    k = sc_alignments[i].index(j+1)
+
+                if label == "none":
+                    alignments[i][k] = merge_idx
+                    merge_idx = []
+
+    return alignments
+
+
 def alignment_performance(automatic_alignments, manual_alignments):
     """ 
-    Computes the performance of the alignment model on our manually annotated subset. 
+    Computes the performance of the alignment method on our manually annotated subset. 
     """
-    tp, fp, total, upp_bound = 0, 0, 0, 0
+    tp, fp, total = 0, 0, 0
 
-    for i, ground_truths in manual_alignments.items():
+    for predictions, ground_truths in zip(automatic_alignments, manual_alignments):
         total += len(ground_truths)
-        upp_bound += len(set(g[0] for g in ground_truths)) 
 
-        for j, pred in enumerate(automatic_alignments[i]):
-            if pred:
-                if [f"simple_{j}", f"complex_{pred - 1}"] in ground_truths:
-                    tp += 1
-                else:
-                    fp += 1
+        for j, preds in enumerate(predictions):
+            if preds:
+                if not isinstance(preds, list):
+                    preds = [preds]
+                for pred in preds:
+                    if [f"simple_{j}", f"complex_{pred - 1}"] in ground_truths:
+                        tp += 1
+                    else:
+                        fp += 1
 
     fn = total - tp
 
-    print(f"tp {tp}, fp {fp}, fn {fn}, total positive {total}, upper bound {upp_bound}")
+    print(f"tp {tp}, fp {fp}, fn {fn}, total positive {total}")
 
     precision = tp / (tp + fp)
     recall = tp / total
     f1 = 2 * precision * recall / (precision + recall) if tp else 0.0
 
-    print("precision: %.6f  recall: %.6f  f1: %.6f" % (precision, recall, f1))
+    print("precision: %.3f  recall: %.3f  f1: %.3f" % (precision, recall, f1))
     return f1
 
 
@@ -161,11 +199,26 @@ if __name__ == "__main__":
     Sample code for computing the performance of the alignment model 
     on our manually annotated subset
     """
-    manual_alignments = load_pickle_file("alignments/manual.pkl")
+    use_merge_labels = True # set to True or False
+    manual_alignments = load_pickle_file("data/alignments/manual.pkl")
+    idx = manual_alignments.keys()
 
-    sc_alignments_train = load_pickle_file("alignments/sc_train.pkl")
-    sc_alignments_val = load_pickle_file("alignments/sc_val.pkl")
-    sc_alignments_test = load_pickle_file("alignments/sc_test.pkl")
+    sc_alignments = load_alignments(idx, simple_to_complex=True)
+    automatic_alignments = sc_alignments
 
-    automatic_alignments = sc_alignments_train + sc_alignments_val + sc_alignments_test
-    alignment_performance(automatic_alignments, manual_alignments)
+    if use_merge_labels:
+        from load_data import load_cochrane_data
+        from preprocessing import build_sentence_level_dataset, build_higher_level_dataset
+
+        data = tuple(map(lambda x, y, z: x + y + z, load_cochrane_data("train"), \
+                         load_cochrane_data("val"), load_cochrane_data("test")))
+        dois, complex, para_ids, simple, _ = ([d[i] for i in idx] for d in data)
+
+        cs_alignments = load_alignments(idx, simple_to_complex=False)
+        sent_df = build_sentence_level_dataset(dois, complex, simple, para_ids, sc_alignments, \
+                                               cs_alignments=cs_alignments, threshold=0.0)
+        doc_df = build_higher_level_dataset(sent_df)
+
+        automatic_alignments = add_1_to_n_alignments(automatic_alignments, doc_df.label)
+
+    alignment_performance(automatic_alignments, manual_alignments.values())
