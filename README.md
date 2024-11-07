@@ -1,7 +1,6 @@
-# doc_simp
+# Beyond Sentence-Level Text Simplification
 
-This repo contains code and resources for the paper [Beyond Sentence-Level Text Simplification: Reproducibility Study of Context-Aware Document Simplification](https://aclanthology.org/2024.determit-1.3/).
-It is based on the [repository](https://github.com/liamcripwell/plan_simp) for the original paper.
+This branch contains code and resources for our paper [Beyond Sentence-Level Text Simplification: Reproducibility Study of Context-Aware Document Simplification](https://aclanthology.org/2024.determit-1.3/).
 
 We changed the original code by implementing early stopping into the training procedure, adding Rouge-L to the evaluation metrics and fixing some minor errors. We also added our code for constructing the paragraph-level Wiki-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
 
@@ -10,19 +9,19 @@ We changed the original code by implementing early stopping into the training pr
 ```bash
 git clone https://github.com/JanB100/doc_simp.git
 cd doc_simp
-conda create -n doc_simp python=3.9
+conda create -n doc_simp python=3.10
 conda activate doc_simp
 pip install -r requirements.txt
 pip install -e .
 ```
 
 ## Pretrained models
-We share all Wiki-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). The original authors also made some of their Newsela-auto pretrained models available on [HuggingFace](https://huggingface.co/liamcripwell). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name, e.g. janbakker/conbart.
+We share all Wiki-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). The original authors also made some of their Newsela-auto pretrained models available on [HuggingFace](https://huggingface.co/liamcripwell). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name, e.g. janbakker/conbart-wikiauto.
 
 ## Data
 The preprocessed Wiki-auto datasets shared by the original authors can be downloaded [here](https://drive.google.com/file/d/1lU8htUIVBuuU24HrPErpV01hlA6tc-d1/view?usp=sharing).
 The paragraph-level data was constructed using [this script](data/paragraph_alignment.py), and can be downloaded [here](https://drive.google.com/file/d/1ZeALAhdWBfVNsFlRnPsGGia4NQB1Dbjq/view?usp=sharing).
-All files should be placed into the data directory.
+All files should be placed into the [data](data) directory.
 
 ## Preparing context representations
 Start by generating the context encodings of all complex and simple sentences. These are used by the contextual classifiers and ConBART.
