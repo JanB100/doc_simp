@@ -6,7 +6,7 @@ import fire
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
 
-from preprocessing import build_higher_level_datasets
+from preprocessing import build_higher_level_dataset
 
 from plan_simp.models.bart import run_generator
 from plan_simp.models.classifier import run_classifier
@@ -149,8 +149,9 @@ def evaluate(model_loc, test_file, x_col="complex", y_col="label", out_file=None
         test_set_out.to_csv(out_file, index=False)
         print(f"Predictions written to {out_file}.")
 
-        para_out, docs_out = build_higher_level_datasets(test_set_out)
+        para_out = build_higher_level_dataset(test_set_out, para_lvl=True)
         para_out.to_csv(out_file.split(".")[0] + "_para.csv", index=False)
+        docs_out = build_higher_level_dataset(test_set_out, para_lvl=False)
         docs_out.to_csv(out_file.split(".")[0] + "_docs.csv", index=False)
 
     end = time.time()
