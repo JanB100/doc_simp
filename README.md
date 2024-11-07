@@ -1,7 +1,7 @@
-# doc_simp
+# Thesis
 
-This branch contains code and resources for the chapter Plan-Guided Simplification of Biomedical Documents.
-It is based on the main branch, which is in turn based on this [repository](https://github.com/liamcripwell/plan_simp).
+This branch contains code and resources for Chapter 3 of my Master's thesis: Plan-Guided Simplification of Biomedical Documents.
+It is based on this [repository](https://github.com/liamcripwell/plan_simp).
 
 We changed the original code by implementing support for the merge operator and a two-stage classifier approach. We also provide our code for aligning and preprocessing the data, along with the updated Cochrane corpus, the resulting alignments and the preprocessed Cochrane-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
 
@@ -10,14 +10,14 @@ We changed the original code by implementing support for the merge operator and 
 ```bash
 git clone https://github.com/JanB100/doc_simp.git
 cd doc_simp
-conda create -n doc_simp python=3.9
+conda create -n doc_simp python=3.10
 conda activate doc_simp
 pip install -r requirements.txt
 pip install -e .
 ```
 
 ## Pretrained models
-We share all Cochrane-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name.
+We share all Cochrane-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name. All model names end on -thesis except for o-bartsent-cochraneauto. 
 
 We also share the [checkpoint](https://drive.google.com/file/d/12FHcrrPdqKgE6R4G7uuTUasuAS9da018/view?usp=sharing) for the neural CRF alignment model which we pretrained on Wiki-manual.
 
@@ -185,7 +185,7 @@ If it is guided by an oracle plan:
 If it is guided by a generated plan:
 
 ```bash
-  --test_file=results/<classifier_name>.csv \
+  --test_file=results/<classifier><_docs/_para/>.csv \
   --op_col=pred_l \
 ```
 
