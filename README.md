@@ -17,7 +17,7 @@ pip install -e .
 ```
 
 ## Pretrained models
-We share all Cochrane-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name. All model names end on -thesis except for o-bartsent-cochraneauto. 
+We share all Cochrane-auto pretrained models on [HuggingFace](https://huggingface.co/janbakker). To leverage these models, simply follow the instructions below and set the model path to the HuggingFace model name. All model names end on -thesis except for o-bartsent, o-bartpara, o-bartdoc and o-conbart, which end on -cochraneauto. 
 
 We also share the [checkpoint](https://drive.google.com/file/d/12FHcrrPdqKgE6R4G7uuTUasuAS9da018/view?usp=sharing) for the neural CRF alignment model which we pretrained on Wiki-manual.
 
