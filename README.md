@@ -1,6 +1,6 @@
 # Thesis
 
-This branch contains code and resources for Chapter 3 of my Master's thesis: Plan-Guided Simplification of Biomedical Documents.
+This branch contains code and resources for Chapter 3 of my [Master's thesis](https://scripties.uba.uva.nl/search?id=record_55015): Plan-Guided Simplification of Biomedical Documents.
 It is based on this [repository](https://github.com/liamcripwell/plan_simp).
 
 We changed the original code by implementing support for the merge operator and a two-stage classifier approach. We also provide our code for aligning and preprocessing the data, along with the updated Cochrane corpus, the resulting alignments and the preprocessed Cochrane-auto datasets. Moreover, we provide detailed documentation on how to train and evaluate each model below.
