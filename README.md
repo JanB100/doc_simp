@@ -7,7 +7,7 @@ We changed the original code by implementing early stopping into the training pr
 ## Installation
 
 ```bash
-git clone https://github.com/JanB100/doc_simp.git
+git clone -b wiki-auto https://github.com/JanB100/doc_simp.git
 cd doc_simp
 conda create -n doc_simp python=3.10
 conda activate doc_simp
