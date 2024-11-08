@@ -1,13 +1,14 @@
 # Cochrane-auto
 
 This branch contains code and resources for training and evaluating the simplification systems in our paper Cochrane-auto: An Aligned Dataset for the Simplification of Biomedical Abstracts.
+It is based on this [repository](https://github.com/liamcripwell/plan_simp).
 
 We changed the original code by implementing early stopping into the training procedure, adding support for the merge operator, adding Rouge-L to the evaluation metrics and fixing some minor errors. Moreover, we provide detailed documentation on how to train and evaluate each model below.
 
 ## Installation
 
 ```bash
-git clone https://github.com/JanB100/doc_simp.git
+git clone -b cochrane-auto https://github.com/JanB100/doc_simp.git
 cd doc_simp
 conda create -n doc_simp python=3.10
 conda activate doc_simp
