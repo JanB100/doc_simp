@@ -42,7 +42,7 @@ if __name__ == '__main__':
     checkpoint_callback = ModelCheckpoint(monitor="val_loss", save_last=True)
 
     # early stopping callback
-    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=1)
+    early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=3)
 
     trainer = pl.Trainer.from_argparse_args(
         args,

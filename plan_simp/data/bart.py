@@ -13,6 +13,22 @@ from plan_simp.data.utils import (
 )
 
 
+def merge_sents(df, x_col, op_col, y_col=None):
+    labels = df[op_col]
+    df[op_col] = [[l] for l in labels]
+
+    for i in range(len(labels)-1, 0, -1):
+        if labels[i-1] in (3, "merge"):
+            df.at[i-1,op_col] += df[op_col][i]
+            df.at[i-1,x_col] += " <s> " + df[x_col][i]
+            if y_col:
+                df.at[i-1,y_col] = str(eval(df[y_col][i-1]) + eval(df[y_col][i]))
+            df = df.drop(i)
+
+    df[op_col] = list(map(str, df[op_col]))
+    return df
+
+
 class BartDataModule(pl.LightningDataModule):
 
     sep = "#$#"
@@ -29,9 +45,11 @@ class BartDataModule(pl.LightningDataModule):
     def setup(self, stage):
         # read and prepare input data
         self.train = pd.read_csv(self.hparams.train_file).dropna()
+        self.train = self.preprocess(self.train)
         self.train = self.train.sample(frac=1)[:min(self.hparams.max_samples, len(self.train))] # NOTE: this will actually exclude the last item
         if self.hparams.val_file is not None:
             self.valid = pd.read_csv(self.hparams.val_file).dropna()
+            self.valid = self.preprocess(self.valid)
         print("All data loaded.")
 
         # train, validation, test split
@@ -126,6 +144,18 @@ class BartDataModule(pl.LightningDataModule):
         return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=1, 
                             pin_memory=True, collate_fn=self.prepro_collate)
     
+    def preprocess(self, df):
+        if self.has_param("op_col"):
+            op_col = self.hparams["op_col"]
+            if self.has_param("sent_level"): 
+                df = merge_sents(df, self.hparams["x_col"], op_col, self.hparams["y_col"])
+            df[op_col] = [["merge" if l == "none" else l for l in eval(ls)] for ls in df[op_col]]
+        else:
+            if self.has_param("sent_level"):
+                df = df[df.label != "merge"]
+                df = df[df.label != "none"]
+        return df
+
     def prepro_collate(self, batch):
         inputs = [x[0] for x in batch]
         labels = [x[-1] for x in batch]
