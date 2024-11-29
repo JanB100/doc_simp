@@ -1,6 +1,6 @@
 # Cochrane-auto
 
-This branch contains code and resources for training and evaluating the simplification systems in our paper Cochrane-auto: An Aligned Dataset for the Simplification of Biomedical Abstracts.
+This branch contains code and resources for training and evaluating the simplification systems in our paper [Cochrane-auto: An Aligned Dataset for the Simplification of Biomedical Abstracts](https://aclanthology.org/2024.tsar-1.5/).
 It is based on this [repository](https://github.com/liamcripwell/plan_simp).
 
 We changed the original code by implementing early stopping into the training procedure, adding support for the merge operator, adding Rouge-L to the evaluation metrics and fixing some minor errors. Moreover, we provide detailed documentation on how to train and evaluate each model below.
